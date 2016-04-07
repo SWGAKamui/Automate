@@ -37,7 +37,7 @@
  */
 
 struct Automate {
-   Ensemble * vide; //!<
+    Ensemble * vide; //!<
 	Ensemble * etats;
 	Ensemble * alphabet;
 	Table* transitions;

@@ -35,8 +35,17 @@
 #include <math.h>
 
 
+void action_get_max_etat( const intptr_t element, void* data ){
+	int * max = (int*) data;
+	if( *max < element ) *max = element;
+}
+
 int get_max_etat( const Automate* automate ){
-	A_FAIRE_RETURN( 0 );
+	int max = INT_MIN;
+
+	pour_tout_element( automate->etats, action_get_max_etat, &max );
+
+	return max;
 }
 
 void action_get_min_etat( const intptr_t element, void* data ){
@@ -471,26 +480,82 @@ Automate * mot_to_automate( const char * mot ){
 	return automate;
 }
 
-Automate * creer_union_des_automates(
-	const Automate * automate_1, const Automate * automate_2
-){
-	A_FAIRE_RETURN( NULL );
+void union_transitions ( int origine, char lettre, int fin, void * data ){
+	ajouter_transition((Automate*)data, origine, lettre, fin);
+}
+
+Automate * creer_union_des_automates(const Automate * automate_1, const Automate * automate_2){
+	Automate * trans = translater_automate(automate_2, automate_1);
+	Automate * newA = creer_automate();
+	transferer_elements_et_libere(newA->etats,creer_union_ensemble(get_etats(automate_1), get_etats(trans)));
+	transferer_elements_et_libere(newA->initiaux,creer_union_ensemble(get_initiaux(automate_1), get_initiaux(trans)));
+	transferer_elements_et_libere(newA->finaux,creer_union_ensemble(get_finaux(automate_1), get_finaux(trans)));
+	pour_toute_transition(automate_1, union_transitions, newA);
+	pour_toute_transition(trans, union_transitions, newA);
+	liberer_automate(trans);
+	return newA;
 }
 
 Ensemble* etats_accessibles( const Automate * automate, int etat ){
-	A_FAIRE_RETURN( NULL ); 
+	Ensemble * etats = creer_ensemble( NULL, NULL, NULL );
+	
+	Ensemble_iterateur it;
+	for(
+		it = premier_iterateur_ensemble( get_alphabet(automate ));
+		! iterateur_ensemble_est_vide( it );
+		it = iterateur_suivant_ensemble( it )
+	){
+		transferer_elements_et_libere( etats, delta1(automate, etat, (char)get_element(it))); 
+	}
+	return etats;
 }
 
 Ensemble* accessibles( const Automate * automate ){
-	A_FAIRE_RETURN( NULL ); 
+	Ensemble * etats = creer_ensemble( NULL, NULL, NULL );
+	
+	Ensemble_iterateur it;
+	for(
+		it = premier_iterateur_ensemble( get_initiaux(automate ));
+		! iterateur_ensemble_est_vide( it );
+		it = iterateur_suivant_ensemble( it )
+	){
+		transferer_elements_et_libere( etats, etats_accessibles(automate, (int)get_element(it))); 
+	}
+	return etats;
+}
+
+void filtrer_etats( int origine, char lettre, int fin, void * data ){
+	if(est_un_etat_de_l_automate((Automate*)data, origine)
+		&& est_un_etat_de_l_automate((Automate*)data, fin))
+		ajouter_transition((Automate*)data, origine, lettre, fin);
 }
 
 Automate *automate_accessible( const Automate * automate ){
-	A_FAIRE_RETURN( NULL ); 
+	Automate * newA = creer_automate();
+	newA->etats = accessibles(automate);
+	newA->alphabet = copier_ensemble(get_alphabet(automate));
+	newA->initiaux = copier_ensemble(get_initiaux(automate));
+	pour_toute_transition(automate, filtrer_etats, newA);
+	newA->finaux = creer_intersection_ensemble(get_etats(newA), get_finaux(automate));
+	return newA;
+}
+
+void inverser_transitions( int origine, char lettre, int fin, void * data ){
+	ajouter_transition((Automate *) data, fin, lettre, origine);
 }
 
 Automate *miroir( const Automate * automate){
-	A_FAIRE_RETURN( NULL ); 
+	if(automate ==NULL)
+		return NULL;
+	Automate * newA = creer_automate();
+	
+	newA->etats = copier_ensemble(get_etats(automate));
+	newA->alphabet = copier_ensemble(get_alphabet(automate));
+	newA->initiaux = copier_ensemble(get_finaux(automate));
+	newA->finaux = copier_ensemble(get_initiaux(automate));
+	pour_toute_transition(automate, inverser_transitions, newA);
+	
+	return newA;
 }
 
 Automate * creer_automate_du_melange(
