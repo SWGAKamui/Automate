@@ -506,8 +506,11 @@ Ensemble* etats_accessibles( const Automate * automate, int etat ){
 		it = iterateur_suivant_ensemble( it )
 	){
 		transferer_elements_et_libere( etats, delta1(automate, etat, (char)get_element(it))); 
+		
 	}
-	return etats;
+	//TODO
+	
+	return 
 }
 
 Ensemble* accessibles( const Automate * automate ){
@@ -532,9 +535,9 @@ void filtrer_etats( int origine, char lettre, int fin, void * data ){
 
 Automate *automate_accessible( const Automate * automate ){
 	Automate * newA = creer_automate();
-	newA->etats = accessibles(automate);
 	newA->alphabet = copier_ensemble(get_alphabet(automate));
 	newA->initiaux = copier_ensemble(get_initiaux(automate));
+	newA->etats = accessibles(automate);
 	pour_toute_transition(automate, filtrer_etats, newA);
 	newA->finaux = creer_intersection_ensemble(get_etats(newA), get_finaux(automate));
 	return newA;
@@ -558,6 +561,7 @@ Automate *miroir( const Automate * automate){
 	return newA;
 }
 
+//TODO
 Automate * creer_automate_du_melange(
 	const Automate* automate_1,  const Automate* automate_2
 ){
