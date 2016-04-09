@@ -498,19 +498,24 @@ Automate * creer_union_des_automates(const Automate * automate_1, const Automate
 
 Ensemble* etats_accessibles( const Automate * automate, int etat ){
 	Ensemble * etats = creer_ensemble( NULL, NULL, NULL );
+	ajouter_element(etats, etat);
 	
-	Ensemble_iterateur it;
+	Ensemble_iterateur itEtats;
 	for(
-		it = premier_iterateur_ensemble( get_alphabet(automate ));
-		! iterateur_ensemble_est_vide( it );
-		it = iterateur_suivant_ensemble( it )
+		itEtats = premier_iterateur_ensemble( etats);
+		! iterateur_ensemble_est_vide( itEtats );
+		itEtats = iterateur_suivant_ensemble( itEtats )
 	){
-		transferer_elements_et_libere( etats, delta1(automate, etat, (char)get_element(it))); 
-		
+		Ensemble_iterateur itLettres;
+		for(
+			itLettres = premier_iterateur_ensemble(get_alphabet(automate));
+			! iterateur_ensemble_est_vide(itLettres);
+			itLettres = iterateur_suivant_ensemble( itLettres)
+		){
+			transferer_elements_et_libere( etats, delta(automate, etats, (char)get_element(itLettres))); 
+		}
 	}
-	//TODO
-	
-	return 
+	return etats;
 }
 
 Ensemble* accessibles( const Automate * automate ){
