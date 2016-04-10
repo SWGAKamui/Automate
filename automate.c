@@ -480,39 +480,43 @@ Automate * mot_to_automate( const char * mot ){
 	return automate;
 }
 
-void union_transitions ( int origine, char lettre, int fin, void * data ){
+void action_creer_union_des_automates ( int origine, char lettre, int fin, void * data ){
 	ajouter_transition((Automate*)data, origine, lettre, fin);
 }
 
 Automate * creer_union_des_automates(const Automate * automate_1, const Automate * automate_2){
-	Automate * trans = translater_automate(automate_2, automate_1);
-	Automate * newA = creer_automate();
-	transferer_elements_et_libere(newA->etats,creer_union_ensemble(get_etats(automate_1), get_etats(trans)));
-	transferer_elements_et_libere(newA->initiaux,creer_union_ensemble(get_initiaux(automate_1), get_initiaux(trans)));
-	transferer_elements_et_libere(newA->finaux,creer_union_ensemble(get_finaux(automate_1), get_finaux(trans)));
-	pour_toute_transition(automate_1, union_transitions, newA);
-	pour_toute_transition(trans, union_transitions, newA);
-	liberer_automate(trans);
-	return newA;
+	//On évite les doublons
+	Automate * automate_2_trans = translater_automate(automate_2, automate_1);
+	Automate * automate_resultat = creer_automate();
+	//On ajoute les états, les initiaux et les finaux des deux automates
+	transferer_elements_et_libere(automate_resultat->etats,creer_union_ensemble(get_etats(automate_1), get_etats(automate_2_trans)));
+	transferer_elements_et_libere(automate_resultat->initiaux,creer_union_ensemble(get_initiaux(automate_1), get_initiaux(automate_2_trans)));
+	transferer_elements_et_libere(automate_resultat->finaux,creer_union_ensemble(get_finaux(automate_1), get_finaux(automate_2_trans)));
+	//On ajoute les transitions des deux automates
+	pour_toute_transition(automate_1, action_creer_union_des_automates, automate_resultat);
+	pour_toute_transition(automate_2_trans, action_creer_union_des_automates, automate_resultat);
+	liberer_automate(automate_2_trans);
+	return automate_resultat;
 }
 
 Ensemble* etats_accessibles( const Automate * automate, int etat ){
 	Ensemble * etats = creer_ensemble( NULL, NULL, NULL );
 	ajouter_element(etats, etat);
 	
-	Ensemble_iterateur itEtats;
+	Ensemble_iterateur it_etats;
 	for(
-		itEtats = premier_iterateur_ensemble( etats);
-		! iterateur_ensemble_est_vide( itEtats );
-		itEtats = iterateur_suivant_ensemble( itEtats )
+		it_etats = premier_iterateur_ensemble( etats);
+		! iterateur_ensemble_est_vide( it_etats );
+		it_etats = iterateur_suivant_ensemble( it_etats )
 	){
-		Ensemble_iterateur itLettres;
+		Ensemble_iterateur it_lettres;
 		for(
-			itLettres = premier_iterateur_ensemble(get_alphabet(automate));
-			! iterateur_ensemble_est_vide(itLettres);
-			itLettres = iterateur_suivant_ensemble( itLettres)
+			it_lettres = premier_iterateur_ensemble(get_alphabet(automate));
+			! iterateur_ensemble_est_vide(it_lettres);
+			it_lettres = iterateur_suivant_ensemble( it_lettres)
 		){
-			transferer_elements_et_libere( etats, delta(automate, etats, (char)get_element(itLettres))); 
+			//Pour chaque état et chaque lettre, on récupère les voisins et on réitère l'opération sur ces-derniers
+			transferer_elements_et_libere( etats, delta(automate, etats, (char)get_element(it_lettres))); 
 		}
 	}
 	return etats;
@@ -527,151 +531,176 @@ Ensemble* accessibles( const Automate * automate ){
 		! iterateur_ensemble_est_vide( it );
 		it = iterateur_suivant_ensemble( it )
 	){
+		//On cherche les états accessibles depuis les initiaux
 		transferer_elements_et_libere( etats, etats_accessibles(automate, (int)get_element(it))); 
 	}
 	return etats;
 }
 
-void filtrer_etats( int origine, char lettre, int fin, void * data ){
+void action_automate_accessible( int origine, char lettre, int fin, void * data ){
+	//Pour savoir si une transition sera dans l'automate accessible, il faut que son origine et sa fin soient accessibles
 	if(est_un_etat_de_l_automate((Automate*)data, origine)
 		&& est_un_etat_de_l_automate((Automate*)data, fin))
 		ajouter_transition((Automate*)data, origine, lettre, fin);
 }
 
 Automate *automate_accessible( const Automate * automate ){
-	Automate * newA = creer_automate();
-	newA->alphabet = copier_ensemble(get_alphabet(automate));
-	newA->initiaux = copier_ensemble(get_initiaux(automate));
-	newA->etats = accessibles(automate);
-	pour_toute_transition(automate, filtrer_etats, newA);
-	newA->finaux = creer_intersection_ensemble(get_etats(newA), get_finaux(automate));
-	return newA;
+	Automate * automate_resultat = creer_automate();
+	//L'alphabet et les initiaux ne changent pas
+	transferer_elements_et_libere(automate_resultat->alphabet, copier_ensemble(get_alphabet(automate)));
+	transferer_elements_et_libere(automate_resultat->initiaux, copier_ensemble(get_initiaux(automate)));
+	//On veut seulement les états accessibles
+	transferer_elements_et_libere(automate_resultat->etats, accessibles(automate));
+	//On conserve uniquement les transitions qui ne concernent que les états accessibles
+	pour_toute_transition(automate, action_automate_accessible, automate_resultat);
+	//On ajoute les finaux accessibles
+	transferer_elements_et_libere(automate_resultat->finaux, creer_intersection_ensemble(get_etats(automate_resultat), get_finaux(automate)));
+	return automate_resultat;
 }
 
-void inverser_transitions( int origine, char lettre, int fin, void * data ){
+void action_miroir( int origine, char lettre, int fin, void * data ){
 	ajouter_transition((Automate *) data, fin, lettre, origine);
 }
 
 Automate *miroir( const Automate * automate){
-	Automate * newA = creer_automate();
-	
-	newA->etats = copier_ensemble(get_etats(automate));
-	newA->alphabet = copier_ensemble(get_alphabet(automate));
-	newA->initiaux = copier_ensemble(get_finaux(automate));
-	newA->finaux = copier_ensemble(get_initiaux(automate));
-	pour_toute_transition(automate, inverser_transitions, newA);
-	
-	return newA;
+	Automate * automate_resultat = creer_automate();
+	//Les états et l'alphabet ne changent pas
+	transferer_elements_et_libere(automate_resultat->etats, copier_ensemble(get_etats(automate)));
+	transferer_elements_et_libere(automate_resultat->alphabet, copier_ensemble(get_alphabet(automate)));
+	//Les initiaux et les finaux s'inversent
+	transferer_elements_et_libere(automate_resultat->initiaux, copier_ensemble(get_finaux(automate)));
+	transferer_elements_et_libere(automate_resultat->finaux, copier_ensemble(get_initiaux(automate)));
+	//On inverse chaque transition
+	pour_toute_transition(automate, action_miroir, automate_resultat);
+	return automate_resultat;
 }
 
-typedef struct Paire Paire;
-struct Paire{
+//Cette structure permettra d'associer chaque état du nouvel automate
+//	aux états auxquels il correspond dans les automates 1 et 2
+typedef struct Couple Couple;
+struct Couple{
 	int etat_automate_1;
 	int etat_automate_2;
 };
 
+//Cette strucure permet d'enrichir le paramètre data des actions
 typedef struct My_data * My_data;
 struct My_data{
-	Paire * md_paires;
+	Couple * md_couples;
 	Automate * md_automate;
 };
 
-void copier_transitions_1( int origine, char lettre, int fin, void * data ){
-	Ensemble_iterateur itEtatsOrigine;
-	print_automate(((My_data)data)->md_automate);
-	fflush(stdout);
+void action_creer_automate_du_melange_copier_transitions_automate_1( int origine, char lettre, int fin, void * data ){
+	Ensemble_iterateur it_etats_origine;
 	for(
-		itEtatsOrigine = premier_iterateur_ensemble( get_etats(((My_data)data)->md_automate));
-		! iterateur_ensemble_est_vide( itEtatsOrigine );
-		itEtatsOrigine = iterateur_suivant_ensemble( itEtatsOrigine )
+		it_etats_origine = premier_iterateur_ensemble( get_etats(((My_data)data)->md_automate));
+		! iterateur_ensemble_est_vide( it_etats_origine );
+		it_etats_origine = iterateur_suivant_ensemble( it_etats_origine )
 	){
-
-		if(((My_data)data)->md_paires[get_element(itEtatsOrigine)].etat_automate_1==origine){
-			
-			Ensemble_iterateur itEtatsFin;
+		//Pour chaque état de l'automate résultat, on regarde si l'état qui lui correspond dans l'automate 1 est notre origine
+		if(((My_data)data)->md_couples[get_element(it_etats_origine)].etat_automate_1==origine){
+			Ensemble_iterateur it_etats_fin;
 			for(
-				itEtatsFin = premier_iterateur_ensemble( get_etats(((My_data)data)->md_automate));
-				! iterateur_ensemble_est_vide( itEtatsFin );
-				itEtatsFin = iterateur_suivant_ensemble( itEtatsFin )
+				it_etats_fin = premier_iterateur_ensemble( get_etats(((My_data)data)->md_automate));
+				! iterateur_ensemble_est_vide( it_etats_fin );
+				it_etats_fin = iterateur_suivant_ensemble( it_etats_fin )
 			){
-				if(((My_data)data)->md_paires[get_element(itEtatsFin)].etat_automate_1==fin
-				  && ((My_data)data)->md_paires[get_element(itEtatsOrigine)].etat_automate_2
-				  ==((My_data)data)->md_paires[get_element(itEtatsFin)].etat_automate_2){
-					ajouter_transition(((My_data)data)->md_automate,get_element(itEtatsOrigine),lettre,get_element(itEtatsFin));
+				//On parcours une nouvelle fois les états de l'automate résultat, où on cherche la fin
+				//en s'assurant que l'état correspondant de l'automate 2 n'a pas changé
+				//puisque dans cette fonction on ne traite que les transitions de l'automate 1
+				if(((My_data)data)->md_couples[get_element(it_etats_fin)].etat_automate_1==fin
+				  && ((My_data)data)->md_couples[get_element(it_etats_origine)].etat_automate_2
+				  ==((My_data)data)->md_couples[get_element(it_etats_fin)].etat_automate_2){
+					ajouter_transition(((My_data)data)->md_automate,get_element(it_etats_origine),lettre,get_element(it_etats_fin));
 				}
 			}
 		}
 	}
 }
 
-void copier_transitions_2( int origine, char lettre, int fin, void * data ){
-	Ensemble_iterateur itEtatsOrigine;
+void action_creer_automate_du_melange_copier_transitions_automate_2( int origine, char lettre, int fin, void * data ){
+	Ensemble_iterateur it_etats_origine;
 	for(
-		itEtatsOrigine = premier_iterateur_ensemble( get_etats(((My_data)data)->md_automate));
-		! iterateur_ensemble_est_vide( itEtatsOrigine );
-		itEtatsOrigine = iterateur_suivant_ensemble( itEtatsOrigine )
+		it_etats_origine = premier_iterateur_ensemble( get_etats(((My_data)data)->md_automate));
+		! iterateur_ensemble_est_vide( it_etats_origine );
+		it_etats_origine = iterateur_suivant_ensemble( it_etats_origine )
 	){
-		if(((My_data)data)->md_paires[get_element(itEtatsOrigine)].etat_automate_2==origine){
-			Ensemble_iterateur itEtatsFin;
+		//Pour chaque état de l'automate résultat, on regarde si l'état qui lui correspond dans l'automate 2 est notre origine
+		if(((My_data)data)->md_couples[get_element(it_etats_origine)].etat_automate_2==origine){
+			Ensemble_iterateur it_etats_fin;
 			for(
-				itEtatsFin = premier_iterateur_ensemble( get_etats(((My_data)data)->md_automate));
-				! iterateur_ensemble_est_vide( itEtatsFin );
-				itEtatsFin = iterateur_suivant_ensemble( itEtatsFin )
+				it_etats_fin = premier_iterateur_ensemble( get_etats(((My_data)data)->md_automate));
+				! iterateur_ensemble_est_vide( it_etats_fin );
+				it_etats_fin = iterateur_suivant_ensemble( it_etats_fin )
 			){
-				if(((My_data)data)->md_paires[get_element(itEtatsFin)].etat_automate_2==fin
-				  && ((My_data)data)->md_paires[get_element(itEtatsOrigine)].etat_automate_1
-				  ==((My_data)data)->md_paires[get_element(itEtatsFin)].etat_automate_1){
-					ajouter_transition(((My_data)data)->md_automate,get_element(itEtatsOrigine),lettre,get_element(itEtatsFin));
+				//On parcours une nouvelle fois les états de l'automate résultat, où on cherche la fin
+				//en s'assurant que l'état correspondant de l'automate 1 n'a pas changé
+				//puisque dans cette fonction on ne traite que les transitions de l'automate 2
+				if(((My_data)data)->md_couples[get_element(it_etats_fin)].etat_automate_2==fin
+				  && ((My_data)data)->md_couples[get_element(it_etats_origine)].etat_automate_1
+				  ==((My_data)data)->md_couples[get_element(it_etats_fin)].etat_automate_1){
+					ajouter_transition(((My_data)data)->md_automate,get_element(it_etats_origine),lettre,get_element(it_etats_fin));
 				}
 			}
 		}
 	}
 }
 
-Automate * creer_automate_du_melange(	const Automate* automate_1,  const Automate* automate_2){
+Automate * creer_automate_du_melange(const Automate* automate_1,  const Automate* automate_2){
+	//On évite les doublons
 	Automate * automate_2_trans = translater_automate(automate_2, automate_1);
-	Automate * newA = creer_automate();
-	Paire * paires = malloc(sizeof(Paire)*taille_ensemble(get_etats(automate_1))*taille_ensemble(get_etats(automate_2_trans)));
+	Automate * automate_resultat = creer_automate();
+	//Le tableau couples contiendra toutes les correspondances entre les nouveaux états et ceux auxquels ils correspondent
+	Couple * couples = malloc(sizeof(Couple)*taille_ensemble(get_etats(automate_1))*taille_ensemble(get_etats(automate_2_trans)));
 	int nb_etats = 0;
 	//Etats + Initiaux + Finaux
-	Paire tmp;
-	Ensemble_iterateur it;
+	Couple tmp;
+	Ensemble_iterateur it_etats_automate_1;
 	for(
-		it = premier_iterateur_ensemble( get_etats(automate_1 ));
-		! iterateur_ensemble_est_vide( it );
-		it = iterateur_suivant_ensemble( it )
+		it_etats_automate_1 = premier_iterateur_ensemble( get_etats(automate_1 ));
+		! iterateur_ensemble_est_vide( it_etats_automate_1 );
+		it_etats_automate_1 = iterateur_suivant_ensemble( it_etats_automate_1 )
 	){
-		Ensemble_iterateur it2;
+		Ensemble_iterateur it_etats_automate_2;
 		for(
-			it2 = premier_iterateur_ensemble( get_etats(automate_2_trans ));
-			! iterateur_ensemble_est_vide( it2 );
-			it2 = iterateur_suivant_ensemble( it2 )
+			it_etats_automate_2 = premier_iterateur_ensemble( get_etats(automate_2_trans ));
+			! iterateur_ensemble_est_vide( it_etats_automate_2 );
+			it_etats_automate_2 = iterateur_suivant_ensemble( it_etats_automate_2 )
 		){
-			tmp.etat_automate_1 = get_element(it);
-			tmp.etat_automate_2 = get_element(it2);
+			//Pour chaque couple d'état possible entre les automates 1 et 2, on ajoute un état
+			tmp.etat_automate_1 = get_element(it_etats_automate_1);
+			tmp.etat_automate_2 = get_element(it_etats_automate_2);
+			//Si les deux étaient initiaux/finaux notre état sera initial/final
 			if(est_un_etat_initial_de_l_automate(automate_1, tmp.etat_automate_1) 
 			  && est_un_etat_initial_de_l_automate(automate_2_trans, tmp.etat_automate_2)){
-				ajouter_etat_initial(newA, nb_etats);
+				ajouter_etat_initial(automate_resultat, nb_etats);
 			}
 			else if(est_un_etat_final_de_l_automate(automate_1, tmp.etat_automate_1)
 			  && est_un_etat_final_de_l_automate(automate_2_trans, tmp.etat_automate_2)){
-				ajouter_etat_final(newA, nb_etats);
+				ajouter_etat_final(automate_resultat, nb_etats);
 			}
 			else{
-				ajouter_etat(newA, nb_etats);
+				ajouter_etat(automate_resultat, nb_etats);
 			}
-			paires[nb_etats++]=tmp;
+			//On conserve sa correspondance avec le couple auxquel il correspond
+			couples[nb_etats++]=tmp;
 		}
 	}
-	
-	newA->alphabet=creer_union_ensemble(get_alphabet(automate_1), get_alphabet(automate_2_trans));
+	//L'alphabet est l'union des deux alphabets
+	transferer_elements_et_libere(automate_resultat->alphabet, creer_union_ensemble(get_alphabet(automate_1), get_alphabet(automate_2_trans)));
 	// Transitions
-	My_data md = malloc(sizeof(My_data));
-	md->md_paires = paires;
-	md->md_automate = newA;
-	pour_toute_transition(automate_1,copier_transitions_1,md);
-	pour_toute_transition(automate_2_trans,copier_transitions_2,md);	
+	//On utilise la structure My_data pour avoir non seulement nos états mais aussi leur couple correspondant
+	My_data md = malloc(sizeof(struct My_data));
+	md->md_couples = couples;
+	md->md_automate = automate_resultat;
+	//Pour chaque transition des automates 1 et 2, on va chercher où elle intervient dans notre automate résultat
+	// Le traitement, bien que similaire, reste légèrement différent selon si on veut copier la transition depuis l'automate 1 ou le 2
+	// Cela semble pourtant relativement "sale" vu qu'il y a beaucoup de duplication de code, comment aurions-nous pu faire ?
+	pour_toute_transition(automate_1,action_creer_automate_du_melange_copier_transitions_automate_1,md);
+	pour_toute_transition(automate_2_trans,action_creer_automate_du_melange_copier_transitions_automate_2,md);
+	free(couples);	
+	free(md);
 	liberer_automate(automate_2_trans);	
-	return newA;
+	return automate_resultat;
 }
 
