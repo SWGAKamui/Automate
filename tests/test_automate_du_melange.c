@@ -29,15 +29,13 @@ void wrap_liberer_automate( Automate * aut ){
 }
 
 int test_automate_du_melange(){
-
 	int result = 1;
 
 	{
 		Automate * aut1 = mot_to_automate("a");
 		Automate * aut2 = mot_to_automate("b");
-
 		Automate * mela = creer_automate_du_melange( aut1, aut2 );
-		
+		print_automate(mela);
 		TEST(
 			1
 			&& mela
@@ -85,7 +83,7 @@ int test_automate_du_melange(){
 		ajouter_etat_final( aut2, 1 );
 
 		Automate * mela = creer_automate_du_melange( aut1, aut2 );
-
+		print_automate(mela);
 		TEST(
 			1
 			&& mela
@@ -139,7 +137,6 @@ int test_automate_du_melange(){
 
 
 int main(){
-
 	if( ! test_automate_du_melange() ){ return 1; }
 
 	return 0;

@@ -553,8 +553,6 @@ void inverser_transitions( int origine, char lettre, int fin, void * data ){
 }
 
 Automate *miroir( const Automate * automate){
-	if(automate ==NULL)
-		return NULL;
 	Automate * newA = creer_automate();
 	
 	newA->etats = copier_ensemble(get_etats(automate));
@@ -566,10 +564,114 @@ Automate *miroir( const Automate * automate){
 	return newA;
 }
 
-//TODO
-Automate * creer_automate_du_melange(
-	const Automate* automate_1,  const Automate* automate_2
-){
-	A_FAIRE_RETURN( NULL ); 
+typedef struct Paire Paire;
+struct Paire{
+	int etat_automate_1;
+	int etat_automate_2;
+};
+
+typedef struct My_data * My_data;
+struct My_data{
+	Paire * md_paires;
+	Automate * md_automate;
+};
+
+void copier_transitions_1( int origine, char lettre, int fin, void * data ){
+	Ensemble_iterateur itEtatsOrigine;
+	print_automate(((My_data)data)->md_automate);
+	fflush(stdout);
+	for(
+		itEtatsOrigine = premier_iterateur_ensemble( get_etats(((My_data)data)->md_automate));
+		! iterateur_ensemble_est_vide( itEtatsOrigine );
+		itEtatsOrigine = iterateur_suivant_ensemble( itEtatsOrigine )
+	){
+
+		if(((My_data)data)->md_paires[get_element(itEtatsOrigine)].etat_automate_1==origine){
+			
+			Ensemble_iterateur itEtatsFin;
+			for(
+				itEtatsFin = premier_iterateur_ensemble( get_etats(((My_data)data)->md_automate));
+				! iterateur_ensemble_est_vide( itEtatsFin );
+				itEtatsFin = iterateur_suivant_ensemble( itEtatsFin )
+			){
+				if(((My_data)data)->md_paires[get_element(itEtatsFin)].etat_automate_1==fin
+				  && ((My_data)data)->md_paires[get_element(itEtatsOrigine)].etat_automate_2
+				  ==((My_data)data)->md_paires[get_element(itEtatsFin)].etat_automate_2){
+					ajouter_transition(((My_data)data)->md_automate,get_element(itEtatsOrigine),lettre,get_element(itEtatsFin));
+				}
+			}
+		}
+	}
+}
+
+void copier_transitions_2( int origine, char lettre, int fin, void * data ){
+	Ensemble_iterateur itEtatsOrigine;
+	for(
+		itEtatsOrigine = premier_iterateur_ensemble( get_etats(((My_data)data)->md_automate));
+		! iterateur_ensemble_est_vide( itEtatsOrigine );
+		itEtatsOrigine = iterateur_suivant_ensemble( itEtatsOrigine )
+	){
+		if(((My_data)data)->md_paires[get_element(itEtatsOrigine)].etat_automate_2==origine){
+			Ensemble_iterateur itEtatsFin;
+			for(
+				itEtatsFin = premier_iterateur_ensemble( get_etats(((My_data)data)->md_automate));
+				! iterateur_ensemble_est_vide( itEtatsFin );
+				itEtatsFin = iterateur_suivant_ensemble( itEtatsFin )
+			){
+				if(((My_data)data)->md_paires[get_element(itEtatsFin)].etat_automate_2==fin
+				  && ((My_data)data)->md_paires[get_element(itEtatsOrigine)].etat_automate_1
+				  ==((My_data)data)->md_paires[get_element(itEtatsFin)].etat_automate_1){
+					ajouter_transition(((My_data)data)->md_automate,get_element(itEtatsOrigine),lettre,get_element(itEtatsFin));
+				}
+			}
+		}
+	}
+}
+
+Automate * creer_automate_du_melange(	const Automate* automate_1,  const Automate* automate_2){
+	Automate * automate_2_trans = translater_automate(automate_2, automate_1);
+	Automate * newA = creer_automate();
+	Paire * paires = malloc(sizeof(Paire)*taille_ensemble(get_etats(automate_1))*taille_ensemble(get_etats(automate_2_trans)));
+	int nb_etats = 0;
+	//Etats + Initiaux + Finaux
+	Paire tmp;
+	Ensemble_iterateur it;
+	for(
+		it = premier_iterateur_ensemble( get_etats(automate_1 ));
+		! iterateur_ensemble_est_vide( it );
+		it = iterateur_suivant_ensemble( it )
+	){
+		Ensemble_iterateur it2;
+		for(
+			it2 = premier_iterateur_ensemble( get_etats(automate_2_trans ));
+			! iterateur_ensemble_est_vide( it2 );
+			it2 = iterateur_suivant_ensemble( it2 )
+		){
+			tmp.etat_automate_1 = get_element(it);
+			tmp.etat_automate_2 = get_element(it2);
+			if(est_un_etat_initial_de_l_automate(automate_1, tmp.etat_automate_1) 
+			  && est_un_etat_initial_de_l_automate(automate_2_trans, tmp.etat_automate_2)){
+				ajouter_etat_initial(newA, nb_etats);
+			}
+			else if(est_un_etat_final_de_l_automate(automate_1, tmp.etat_automate_1)
+			  && est_un_etat_final_de_l_automate(automate_2_trans, tmp.etat_automate_2)){
+				ajouter_etat_final(newA, nb_etats);
+			}
+			else{
+				ajouter_etat(newA, nb_etats);
+			}
+			paires[nb_etats++]=tmp;
+		}
+	}
+	
+	newA->alphabet=creer_union_ensemble(get_alphabet(automate_1), get_alphabet(automate_2_trans));
+	// Transitions
+	My_data md = malloc(sizeof(My_data));
+	md->md_paires = paires;
+	md->md_automate = newA;
+	pour_toute_transition(automate_1,copier_transitions_1,md);
+	pour_toute_transition(automate_2_trans,copier_transitions_2,md);	
+	liberer_automate(automate_2_trans);	
+	return newA;
 }
 
